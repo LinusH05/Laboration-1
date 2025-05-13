@@ -13,18 +13,13 @@ const express = require('express');
 const jsDOM = require('jsdom');
 const cookieParser = require('cookie-parser');
 
-const globalObject = require('./servermodules/game-modul');
+const globalObject = require('./servermodules/game-modul.js');
 
 const fs = require('fs');
 
 let app = express();
 
 let serverRespons;
-
-
-
-
-
 
 //Extra från F3
 app.listen(3000, function(req, res){
@@ -35,23 +30,35 @@ app.listen(3000, function(req, res){
 
 app.use('/public', express.static(__dirname + "/static"));
 app.use(express.urlencoded( { extended : true }));
-app.use(cookieParser());
+app.use(cookieParser('asdasdad'));
 
 app.get('/', function(request, response){
 
     console.log(request.method, request.url);
     
-    response.sendFile(__dirname + '/static/html/loggain.html', function(err){
-        //Felmeddelande
-    });
+    if (request.signedCookies.color && request.signedCookies.nickName) {
 
-    response.cookie('testCookie', 'true', { maxAge : 10000});
+        response.sendFile(__dirname + '/static/html/index.html', function(err){
+            //Felmeddelande
+        });
+    
+    } else {
+        
+        response.sendFile(__dirname + '/static/html/loggain.html', function(err){
+            //Felmeddelande
+        });
+    }
 
 });
 
 app.get('/reset', function(request, response){
 
+    if (request.signedCookies.color && request.signedCookies.nickName) {
+        response.clearCookie('nickName');
+        response.clearCookie('color');
+    }
 
+    response.redirect('/');
 
 });
 
@@ -73,7 +80,7 @@ app.post('/', function(request, response) {
         if(nick1 == undefined){
 
             throw{
-                message : "Nickname får inte vara undefined"
+                message : "Nickname saknas!"
             }
         }
 
@@ -81,7 +88,7 @@ app.post('/', function(request, response) {
         if(color1 == undefined){
             
             throw{
-                message : "Färg får inte vara undefined"
+                message : "Färg saknas!"
             }
         }
 
@@ -97,7 +104,7 @@ app.post('/', function(request, response) {
         if (color1.length < 7) {
 
             throw{
-                message : "Färg måste innehålla 7 tecken"
+                message : "Färg ska innehålla 7 tecken!"
             }
         }
 
@@ -106,44 +113,50 @@ app.post('/', function(request, response) {
 
 
             throw{
-                elementColor1 : color1,
-                message : "Färgen får inte vara svart eller vit"
+                message : "Ogiltig färg!"
             };
         }
 
-        console.log("Ska fungera")
-
         if (globalObject.playerOneNick === null && globalObject.playerOneColor === null) {
+
             globalObject.playerOneNick = nick1;
             globalObject.playerOneColor = color1;
-            
-            response.cookie('nickName', nick1, {maxAge : 60 * 1000 * 120});
-            response.cookie('nickName', color1, {maxAge : 60 * 1000 * 120}); //2 timmar
 
             console.log(nick1, color1, "Sparar undan player 1");
-            response.redirect('/')
-        } else if (globalObject.playerTwoNick === null && globalObject.playerTwoColor === null) {
+
+        } else if (globalObject.playerTwoNick === null || globalObject.playerTwoColor === null) {
+
             //Om spelare 1's nickname är samma som spelare 2's nickname
             if(globalObject.playerOneNick === nick1) {
+
                 throw{
                     message : "Nickname redan taget!"
                 }
-            } else { globalObject.playerTwoNick = nick1; }
+
+            } else {
+                globalObject.playerTwoNick = nick1;
+                response.cookie('nickName', nick1, {maxAge : 60 * 1000 * 120, signed : true});
+                console.log("Sparar nick-cookie");
+            }
 
             //Om spelare 1 och spelare 2 har samma färg 
             if(globalObject.playerOneColor === color1) {
+
                 throw {
                     message : "Färg redan tagen!"
                 }
-            } else { globalObject.playerTwoColor = color1;}
 
-            
+            } else {
+                globalObject.playerTwoColor = color1;
+                response.cookie('color', color1, {maxAge : 60 * 1000 * 120, signed : true});
+                console.log("Sparar color-cookie");
+            }
+
             console.log(nick1, color1, "Sparar undan player 2");
-            response.writeHead(200, { "content-type" : "text/html" } )
-            response.end('<h1>SPEL</h1>');
-        } else {
-            
+
         }
+
+        response.redirect('/');
 
         /**
         //Om spelare 1's nickname är samma som spelare 2's nickname
@@ -166,7 +179,7 @@ app.post('/', function(request, response) {
         //response.cookie('NickName', color1, {maxAge : 60 * 1000 * 120}); //2 timmar
         
 
-    } catch(errorMsg){
+    } catch(errorMsg) {
 
 
         fs.readFile(__dirname + '/static/html/loggain.html', function(err, data){
@@ -180,11 +193,7 @@ app.post('/', function(request, response) {
             response.send(data);
             
         });
-        
-
-    }
-
-
     
+    }
 
 });
