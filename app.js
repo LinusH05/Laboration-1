@@ -15,28 +15,81 @@ const cookieParser = require('cookie-parser');
 
 const globalObject = require('./servermodules/game-modul.js');
 
+
+const {Server} = require('socket.io'); 
+
 const fs = require('fs');
 
 let app = express();
 
-let serverRespons;
-
-//Extra från F3
-app.listen(3000, function(req, res){
+const httpserver = app.listen(3000, function(req, res){
     console.log('Servern körs');
-    
-    serverRespons = res;
 });
+
+const io = new Server(httpserver);
 
 app.use('/public', express.static(__dirname + "/static"));
 app.use(express.urlencoded( { extended : true }));
 app.use(cookieParser('asdasdad'));
 
+io.on('connection', function(socket) {
+
+    console.log(globalObject.parseCookies(socket.handshake.headers.cookie));
+
+    if(globalObject.playerOneSocketId === null || globalObject.playerTwoSocketId === null){
+
+        if (globalObject.playerOneNick !== null && globalObject.playerTwoNick === null) {
+            //Spelare 1
+            globalObject.playerOneSocketId = socket.id;
+            socket.join('room1');
+        }
+        else if(globalObject.playerOneNick !== null && globalObject.playerTwoNick !== null){
+            //Spelare 2
+            globalObject.playerTwoSocketId = socket.id;
+            socket.join('room2');
+
+                io.to('room1').emit('newGame', {
+                    opponentNick : globalObject.playerTwoNick,
+                    opponentColor : globalObject.playerTwoColor,
+                    myColor : globalObject.playerOneColor
+                });
+                console.log('Spelare 1 fick spelare 2 data');
+            
+                io.to('room2').emit('newGame', {
+                    opponentNick : globalObject.playerOneNick,
+                    opponentColor : globalObject.playerOneColor,
+                    myColor : globalObject.playerTwoColor
+                });
+                console.log('Spelare 2 fick spelare 1 data');
+            
+        }
+    
+    }else{
+        //Disconnect vid 3e spelare
+        console.log('Disconnect...')
+        console.log('Redan två spelare anslutna!');
+        socket.disconnect();
+    }
+
+    
+    
+/*
+    socket.on(nickName,color, function(){
+        const cookieHeader = socket.handshake.headers.cookie;
+        const cookies = parseCookies(cookieHeader);
+        const nickName = cookies.nickName;
+        const color = cookies.color;
+
+        
+    })
+    */
+});
+
 app.get('/', function(request, response){
 
     console.log(request.method, request.url);
     
-    if (request.signedCookies.color && request.signedCookies.nickName) {
+    if (request.cookies.color && request.cookies.nickName) {
 
         response.sendFile(__dirname + '/static/html/index.html', function(err){
             //Felmeddelande
@@ -53,7 +106,7 @@ app.get('/', function(request, response){
 
 app.get('/reset', function(request, response){
 
-    if (request.signedCookies.color && request.signedCookies.nickName) {
+    if (request.cookies.color && request.cookies.nickName) {
         response.clearCookie('nickName');
         response.clearCookie('color');
     }
@@ -111,7 +164,6 @@ app.post('/', function(request, response) {
         //Färg är svart eller vit
         if(color1 === "#ffffff" || color1 === "#000000"){
 
-
             throw{
                 message : "Ogiltig färg!"
             };
@@ -121,6 +173,9 @@ app.post('/', function(request, response) {
 
             globalObject.playerOneNick = nick1;
             globalObject.playerOneColor = color1;
+
+            response.cookie('nickName', nick1, {maxAge : 60 * 1000 * 120, httpOnly : true});
+            response.cookie('color', color1, {maxAge : 60 * 1000 * 120, httpOnly : true});
 
             console.log(nick1, color1, "Sparar undan player 1");
 
@@ -135,7 +190,7 @@ app.post('/', function(request, response) {
 
             } else {
                 globalObject.playerTwoNick = nick1;
-                response.cookie('nickName', nick1, {maxAge : 60 * 1000 * 120, signed : true});
+                response.cookie('nickName', nick1, {maxAge : 60 * 1000 * 120, httpOnly : true});
                 console.log("Sparar nick-cookie");
             }
 
@@ -148,7 +203,7 @@ app.post('/', function(request, response) {
 
             } else {
                 globalObject.playerTwoColor = color1;
-                response.cookie('color', color1, {maxAge : 60 * 1000 * 120, signed : true});
+                response.cookie('color', color1, {maxAge : 60 * 1000 * 120, httpOnly : true});
                 console.log("Sparar color-cookie");
             }
 
@@ -196,4 +251,6 @@ app.post('/', function(request, response) {
     
     }
 
+
 });
+
