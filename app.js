@@ -107,6 +107,12 @@ io.on('connection', function(socket) {
     */
 });
 
+io.on('newMove', function(socket) {
+
+    console.log(socket.headers.data);
+
+});
+
 app.get('/', function(request, response){
 
     console.log(request.method, request.url);
