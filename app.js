@@ -22,7 +22,7 @@ const fs = require('fs');
 
 let app = express();
 
-const httpserver = app.listen(3000, function(req, res){
+const httpserver = app.listen(3002, function(req, res){
     console.log('Servern körs');
 });
 
@@ -34,43 +34,65 @@ app.use(cookieParser('asdasdad'));
 
 io.on('connection', function(socket) {
 
-    console.log(globalObject.parseCookies(socket.handshake.headers.cookie));
+    const cookieHeader = socket.handshake.headers.cookie;
+    const cookies = globalObject.parseCookies(cookieHeader);
 
-    if(globalObject.playerOneSocketId === null || globalObject.playerTwoSocketId === null){
+    if (cookies.nickName && cookies.color) {
 
-        if (globalObject.playerOneNick !== null && globalObject.playerTwoNick === null) {
-            //Spelare 1
-            globalObject.playerOneSocketId = socket.id;
-            socket.join('room1');
-        }
-        else if(globalObject.playerOneNick !== null && globalObject.playerTwoNick !== null){
-            //Spelare 2
-            globalObject.playerTwoSocketId = socket.id;
-            socket.join('room2');
+        console.log("Cookie nickname: " + cookies.nickName + " | ","Cookie color: " + cookies.color);
 
+        if(globalObject.playerOneSocketId === null || globalObject.playerTwoSocketId === null){
+            //Om spelare 1 eller 2 inte har ett socketId sparat
+    
+            if (globalObject.playerOneNick !== null && globalObject.playerTwoNick === null) {
+                //Om spelare 1 är sparad men inte spelare 2
+    
+                globalObject.playerOneSocketId = socket.id;
+                socket.join('room1');
+    
+            } else if (globalObject.playerOneNick !== null && globalObject.playerTwoNick !== null) {
+                //Om spelare 1 och 2 är sparade
+    
+                globalObject.playerTwoSocketId = socket.id;
+                socket.join('room2');
+
+                globalObject.resetGameArea();
+    
                 io.to('room1').emit('newGame', {
                     opponentNick : globalObject.playerTwoNick,
                     opponentColor : globalObject.playerTwoColor,
                     myColor : globalObject.playerOneColor
                 });
                 console.log('Spelare 1 fick spelare 2 data');
-            
+                
                 io.to('room2').emit('newGame', {
                     opponentNick : globalObject.playerOneNick,
                     opponentColor : globalObject.playerOneColor,
                     myColor : globalObject.playerTwoColor
                 });
                 console.log('Spelare 2 fick spelare 1 data');
-            
-        }
-    
-    }else{
-        //Disconnect vid 3e spelare
-        console.log('Disconnect...')
-        console.log('Redan två spelare anslutna!');
-        socket.disconnect();
-    }
 
+                globalObject.currentPlayer = 1;
+
+                io.to("room1").emit('yourMove', null);
+  
+            }
+        
+        } else {
+
+            //Disconnect vid 3e spelare
+            console.log('Disconnect...')
+            console.log('Redan två spelare anslutna!');
+            socket.disconnect(true);
+
+        }    
+
+    } else {
+
+        console.log("Kakorna saknas!");
+        socket.disconnect(true);
+
+    }
     
     
 /*
@@ -109,7 +131,18 @@ app.get('/reset', function(request, response){
     if (request.cookies.color && request.cookies.nickName) {
         response.clearCookie('nickName');
         response.clearCookie('color');
+        console.log("Kakor rensade");
     }
+
+    globalObject.playerOneNick = null
+    globalObject.playerOneColor = null
+    globalObject.playerOneSocketId = null
+    globalObject.playerTwoNick = null
+    globalObject.playerTwoColor = null
+    globalObject.playerTwoSocketId = null
+    globalObject.currentPlayer = null
+    globalObject.timerId = null
+    console.log("Värden i globalObject rensade");
 
     response.redirect('/');
 
@@ -125,91 +158,83 @@ app.post('/', function(request, response) {
     try{
 
         if(request.body !== undefined){
+
             nick1 = request.body.nick_1;
             color1 = request.body.color_1;
+
         }
 
         //Om nickname är undefined
         if(nick1 == undefined){
 
-            throw{
-                message : "Nickname saknas!"
-            }
+            throw { message : "Nickname saknas!" }
+
         }
 
         //Om färg är undefined
         if(color1 == undefined){
             
-            throw{
-                message : "Färg saknas!"
-            }
+            throw { message : "Färg saknas!" }
+
         }
 
         //Om nickname är för kort 
         if(nick1.length < 3 ){
                         
-            throw{
-                message : "Nickname måste vara minst 3 tecken långt"
-            };
+            throw { message : "Nickname måste vara minst 3 tecken långt" }
+
         }
 
         //Färg inte innehåller 7 tecken
         if (color1.length < 7) {
 
-            throw{
-                message : "Färg ska innehålla 7 tecken!"
-            }
+            throw { message : "Färg ska innehålla 7 tecken!" }
         }
 
         //Färg är svart eller vit
         if(color1 === "#ffffff" || color1 === "#000000"){
 
-            throw{
-                message : "Ogiltig färg!"
-            };
+            throw { message : "Ogiltig färg!" }
+
         }
 
         if (globalObject.playerOneNick === null && globalObject.playerOneColor === null) {
+            //Om spelare 1 inte är sparad
 
             globalObject.playerOneNick = nick1;
             globalObject.playerOneColor = color1;
+            console.log(nick1, color1, "Sparar undan spelare 1");
 
             response.cookie('nickName', nick1, {maxAge : 60 * 1000 * 120, httpOnly : true});
             response.cookie('color', color1, {maxAge : 60 * 1000 * 120, httpOnly : true});
+            console.log("Sparar cookies för spelare 1");
 
-            console.log(nick1, color1, "Sparar undan player 1");
-
-        } else if (globalObject.playerTwoNick === null || globalObject.playerTwoColor === null) {
+        } else if (globalObject.playerTwoNick === null && globalObject.playerTwoColor === null) {
+            //Om spelare 2 inte är sparad
 
             //Om spelare 1's nickname är samma som spelare 2's nickname
             if(globalObject.playerOneNick === nick1) {
 
-                throw{
-                    message : "Nickname redan taget!"
-                }
+                throw { message : "Nickname redan taget!" }
 
-            } else {
-                globalObject.playerTwoNick = nick1;
-                response.cookie('nickName', nick1, {maxAge : 60 * 1000 * 120, httpOnly : true});
-                console.log("Sparar nick-cookie");
             }
 
             //Om spelare 1 och spelare 2 har samma färg 
             if(globalObject.playerOneColor === color1) {
 
-                throw {
-                    message : "Färg redan tagen!"
-                }
+                throw { message : "Färg redan tagen!" }
 
-            } else {
-                globalObject.playerTwoColor = color1;
-                response.cookie('color', color1, {maxAge : 60 * 1000 * 120, httpOnly : true});
-                console.log("Sparar color-cookie");
             }
 
-            console.log(nick1, color1, "Sparar undan player 2");
+            globalObject.playerTwoNick = nick1;
+            globalObject.playerTwoColor = color1;
+            console.log(nick1, color1, "Sparar undan spelare 2");
 
-        }
+            response.cookie('nickName', nick1, {maxAge : 60 * 1000 * 120, httpOnly : true});
+            response.cookie('color', color1, {maxAge : 60 * 1000 * 120, httpOnly : true});
+            console.log("Sparar cookies för spelare 2");
+
+        } else { console.log("Två spelare redan sparade"); }
 
         response.redirect('/');
 
