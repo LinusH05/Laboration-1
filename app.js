@@ -43,7 +43,8 @@ io.on('connection', function(socket) {
 
         if(globalObject.playerOneSocketId === null || globalObject.playerTwoSocketId === null){
             //Om spelare 1 eller 2 inte har ett socketId sparat
-    
+            
+            //ERROR - SKA REDIGERAS
             if (globalObject.playerOneNick !== null && globalObject.playerTwoNick === null) {
                 //Om spelare 1 är sparad men inte spelare 2
     
@@ -55,26 +56,6 @@ io.on('connection', function(socket) {
     
                 globalObject.playerTwoSocketId = socket.id;
                 socket.join('room2');
-
-                globalObject.resetGameArea();
-    
-                io.to('room1').emit('newGame', {
-                    opponentNick : globalObject.playerTwoNick,
-                    opponentColor : globalObject.playerTwoColor,
-                    myColor : globalObject.playerOneColor
-                });
-                console.log('Spelare 1 fick spelare 2 data');
-                
-                io.to('room2').emit('newGame', {
-                    opponentNick : globalObject.playerOneNick,
-                    opponentColor : globalObject.playerOneColor,
-                    myColor : globalObject.playerTwoColor
-                });
-                console.log('Spelare 2 fick spelare 1 data');
-
-                globalObject.currentPlayer = 1;
-
-                io.to("room1").emit('yourMove', null);
   
             }
         
@@ -85,7 +66,33 @@ io.on('connection', function(socket) {
             console.log('Redan två spelare anslutna!');
             socket.disconnect(true);
 
-        }    
+        }
+
+        if (globalObject.playerOneSocketId !== null && globalObject.playerTwoSocketId !== null) {
+
+            console.log("Nytt spel?");
+
+            globalObject.resetGameArea();
+    
+            io.to('room1').emit('newGame', {
+                "opponentNick" : globalObject.playerTwoNick,
+                "opponentColor" : globalObject.playerTwoColor,
+                "myColor" : globalObject.playerOneColor
+            });
+            console.log('Spelare 1 fick spelare 2 data');
+            
+            io.to('room2').emit('newGame', {
+                "opponentNick" : globalObject.playerOneNick,
+                "opponentColor" : globalObject.playerOneColor,
+                "myColor" : globalObject.playerTwoColor
+            });
+            console.log('Spelare 2 fick spelare 1 data');
+
+            globalObject.currentPlayer = 1;
+
+            io.to("room1").emit('yourMove', null);
+
+        }
 
     } else {
 
@@ -105,13 +112,54 @@ io.on('connection', function(socket) {
         
     })
     */
+
+    socket.on('newMove', function(data) {
+
+        console.log(data.cellId);
+
+        if (socket.id === globalObject.playerOneSocketId) {
+
+            globalObject.gameArea[data.cellId] = globalObject.playerOneNick;
+            globalObject.currentPlayer = 2;
+            
+            io.to("room2").emit('yourMove', { "cellId" : data.cellId });
+
+            console.log("Nu blir det spelare 2's tur");  
+            
+        } else {
+
+            globalObject.gameArea[data.cellId] = globalObject.playerTwoNick;  
+            globalObject.currentPlayer = 1;
+
+            io.to("room1").emit('yourMove', { "cellId" : data.cellId });
+
+            console.log("Nu blir det spelare 1's tur");
+
+        }
+
+        let result = globalObject.checkForWinner();
+
+        if ( result === 0 ) {
+            console.log("Spelet fortsätter");
+        }
+        else if( result === globalObject.playerOneNick){
+            io.emit('gameover', globalObject.playerOneNick + " vann spelet");
+        }
+        else if( result === globalObject.playerTwoNick){
+            io.emit('gameover', globalObject.playerTwoNick + " vann spelet");
+        } else if(result === 3 ){
+            io.emit('gameover', "Spelet är oavgjort");
+        }
+
+        if (result === globalObject.playerOneNick || result === globalObject.playerTwoNick || result === 3) {
+            globalObject.playerOneSocketId = null;
+            globalObject.playerTwoSocketId = null;
+        }
+        
+    });
 });
 
-io.on('newMove', function(socket) {
 
-    console.log(socket.headers.data);
-
-});
 
 app.get('/', function(request, response){
 
@@ -284,4 +332,3 @@ app.post('/', function(request, response) {
 
 
 });
-
