@@ -1,13 +1,6 @@
 'use strict';
 //Filen app.js är den enda ni skall och tillåts skriva kod i.
 
-    //Access med localhost:3000
-    //nodemon app.js för konstant körning
-    //Ctrl c för att stoppa terminalen/git
-    //npm install - projektNamnet
-    //node app.js för en körning
-    //cd tictactoe
-
 const express = require('express');
 
 const jsDOM = require('jsdom');
@@ -44,7 +37,7 @@ io.on('connection', function(socket) {
         if(globalObject.playerOneSocketId === null || globalObject.playerTwoSocketId === null){
             //Om spelare 1 eller 2 inte har ett socketId sparat
             
-            //ERROR - SKA REDIGERAS
+            
             if (globalObject.playerOneNick !== null && globalObject.playerTwoNick === null) {
                 //Om spelare 1 är sparad men inte spelare 2
     
@@ -90,6 +83,8 @@ io.on('connection', function(socket) {
 
             globalObject.currentPlayer = 1;
 
+            globalObject.timerId = setInterval(timeout, 5000);
+
             io.to("room1").emit('yourMove', null);
 
         }
@@ -101,17 +96,6 @@ io.on('connection', function(socket) {
 
     }
     
-    
-/*
-    socket.on(nickName,color, function(){
-        const cookieHeader = socket.handshake.headers.cookie;
-        const cookies = parseCookies(cookieHeader);
-        const nickName = cookies.nickName;
-        const color = cookies.color;
-
-        
-    })
-    */
 
     socket.on('newMove', function(data) {
 
@@ -124,7 +108,10 @@ io.on('connection', function(socket) {
             
             io.to("room2").emit('yourMove', { "cellId" : data.cellId });
 
-            console.log("Nu blir det spelare 2's tur");  
+            clearInterval(globalObject.timerId);
+            globalObject.timerId = setInterval(timeout, 5000);
+
+            console.log("Nu blir det spelare 2's tur");
             
         } else {
 
@@ -132,6 +119,9 @@ io.on('connection', function(socket) {
             globalObject.currentPlayer = 1;
 
             io.to("room1").emit('yourMove', { "cellId" : data.cellId });
+
+            clearInterval(globalObject.timerId);
+            globalObject.timerId = setInterval(timeout, 5000);
 
             console.log("Nu blir det spelare 1's tur");
 
@@ -144,22 +134,37 @@ io.on('connection', function(socket) {
         }
         else if( result === globalObject.playerOneNick){
             io.emit('gameover', globalObject.playerOneNick + " vann spelet");
+            clearInterval(globalObject.timerId);
         }
         else if( result === globalObject.playerTwoNick){
             io.emit('gameover', globalObject.playerTwoNick + " vann spelet");
+            clearInterval(globalObject.timerId);
         } else if(result === 3 ){
             io.emit('gameover', "Spelet är oavgjort");
-        }
-
-        if (result === globalObject.playerOneNick || result === globalObject.playerTwoNick || result === 3) {
-            globalObject.playerOneSocketId = null;
-            globalObject.playerTwoSocketId = null;
+            clearInterval(globalObject.timerId);
         }
         
-    });
+    });     
+
 });
 
+function timeout(){
 
+    //Kontroll om vems tur det är.
+    if(globalObject.currentPlayer === 1){
+        io.to("room1").emit('timeout');
+        io.to("room2").emit("yourMove", null);
+        globalObject.currentPlayer = 2;
+    }else if(globalObject.currentPlayer === 2){
+        io.to("room2").emit('timeout');
+        io.to("room1").emit("yourMove", null);
+        globalObject.currentPlayer = 1;
+    }
+    
+    clearInterval(globalObject.timerId);
+    globalObject.timerId = setInterval(timeout, 5000);
+
+}
 
 app.get('/', function(request, response){
 
@@ -258,7 +263,7 @@ app.post('/', function(request, response) {
             globalObject.playerOneNick = nick1;
             globalObject.playerOneColor = color1;
             console.log(nick1, color1, "Sparar undan spelare 1");
-
+            
             response.cookie('nickName', nick1, {maxAge : 60 * 1000 * 120, httpOnly : true});
             response.cookie('color', color1, {maxAge : 60 * 1000 * 120, httpOnly : true});
             console.log("Sparar cookies för spelare 1");
@@ -330,5 +335,6 @@ app.post('/', function(request, response) {
     
     }
 
-
 });
+
+
